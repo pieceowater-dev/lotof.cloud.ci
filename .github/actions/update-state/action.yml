@@ -36,7 +36,7 @@ runs:
       run: |
         set -e
         cd state-repo/${{ inputs.repo-name }}  # Теперь путь правильный
-        sed -i "s|image:.*|image: ${GITHUB_REPOSITORY}:${{ inputs.commit-sha }}|" manifest.yaml
+        sed -i "s|image:.*|image: ghcr.io/${{ github.repository_owner }}/${{ inputs.repo-name }}:${{ inputs.commit-sha:0:8 }}|" manifest.yaml
         git config --global user.name "GitHub Actions"
         git config --global user.email "actions@github.com"
         git add manifest.yaml
