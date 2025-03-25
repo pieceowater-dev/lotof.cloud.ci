@@ -1,0 +1,36 @@
+name: "Update lotof.cloud.state"
+description: "Updates the Docker image version in lotof.cloud.state"
+inputs:
+  repo-name:
+    description: "Repository name"
+    required: true
+  commit-sha:
+    description: "Commit SHA"
+    required: true
+  branch:
+    description: "Branch"
+    required: true
+  github-token:
+    description: "GitHub Token for commit"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout state repository
+      uses: actions/checkout@v4
+      with:
+        repository: pieceowater-dev/lotof.cloud.state
+        ref: ${{ inputs.branch }}
+        token: ${{ inputs.github-token }}
+
+    - name: Update image version
+      shell: bash
+      run: |
+        cd ${{ inputs.repo-name }}
+        sed -i "s|image:.*|image: ${GITHUB_REPOSITORY}:${{ inputs.commit-sha }}|" manifest.yaml
+        git config --global user.name "GitHub Actions"
+        git config --global user.email "actions@github.com"
+        git add manifest.yaml
+        git commit -m "Update image for ${{ inputs.repo-name }} to ${{ inputs.commit-sha }}"
+        git push origin ${{ inputs.branch }}
