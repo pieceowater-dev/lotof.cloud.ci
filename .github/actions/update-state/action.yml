@@ -36,7 +36,7 @@ runs:
       run: |
         set -e
         cd state-repo/${{ inputs.repo-name }}
-        SHORT_SHA=$(echo "${{ inputs.commit-sha }}" | cut -c1-8)
+        SHORT_SHA=$(echo "${{ inputs.commit-sha }}" | cut -c1-7)
         sed -i "s|image:.*|image: ghcr.io/${{ github.repository_owner }}/${{ inputs.repo-name }}:$SHORT_SHA|" manifest.yaml
         git config --global user.name "GitHub Actions"
         git config --global user.email "actions@github.com"
