@@ -10,9 +10,6 @@ inputs:
   branch:
     description: "Branch"
     required: true
-  github-token:
-    description: "GitHub Token for commit"
-    required: true
 
 runs:
   using: "composite"
@@ -22,7 +19,7 @@ runs:
       with:
         repository: pieceowater-dev/lotof.cloud.state
         ref: ${{ inputs.branch }}
-        token: ${{ inputs.github-token }}
+        token: ${{ secrets.STATE_REPO_TOKEN }}
 
     - name: Update image version
       shell: bash
