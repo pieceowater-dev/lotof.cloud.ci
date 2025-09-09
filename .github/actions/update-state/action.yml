@@ -29,7 +29,8 @@ runs:
       shell: bash
       run: |
         GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no" \
-        git clone --branch ${{ inputs.branch }} git@github.com:pieceowater-dev/lotof.cloud.state.git state-repo
+        # git clone --branch ${{ inputs.branch }} git@github.com:pieceowater-dev/lotof.cloud.state.git state-repo
+        git clone git@github.com:pieceowater-dev/lotof.cloud.state.{{ inputs.branch }}.git state-repo
 
     - name: Update image version
       shell: bash
@@ -42,4 +43,5 @@ runs:
         git config --global user.email "actions@github.com"
         git add manifest.yaml
         git commit -m "Update image for ${{ inputs.repo-name }} to $SHORT_SHA"
-        git push origin ${{ inputs.branch }}
+        # git push origin ${{ inputs.branch }}
+        git push
