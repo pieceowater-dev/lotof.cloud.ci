@@ -17,33 +17,46 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Setup SSH key
+    - name: Update image version in the state repository
       shell: bash
+      env:
+        SSH_KEY: ${{ inputs.ssh-key }}
+        REPO_NAME: ${{ inputs.repo-name }}
+        COMMIT_SHA: ${{ inputs.commit-sha }}
+        STATE_BRANCH: ${{ inputs.branch }}
+        OWNER: ${{ github.repository_owner }}
       run: |
-        mkdir -p ~/.ssh
-        echo "${{ inputs.ssh-key }}" > ~/.ssh/id_ed25519
-        chmod 600 ~/.ssh/id_ed25519
-        ssh-keyscan github.com >> ~/.ssh/known_hosts
+        set -euo pipefail
+        # Everything lives in a throwaway directory. On a self-hosted runner ~
+        # is a real account's home: the deploy key, known_hosts and the git
+        # identity must never be written there.
+        WORK=$(mktemp -d)
+        trap 'rm -rf "$WORK"' EXIT
+        install -m 600 /dev/null "$WORK/id_ed25519"
+        printf '%s\n' "$SSH_KEY" > "$WORK/id_ed25519"
+        export GIT_SSH_COMMAND="ssh -i $WORK/id_ed25519 -o IdentitiesOnly=yes -o UserKnownHostsFile=$WORK/known_hosts -o StrictHostKeyChecking=accept-new"
+        export GIT_AUTHOR_NAME="GitHub Actions" GIT_AUTHOR_EMAIL="actions@github.com"
+        export GIT_COMMITTER_NAME="GitHub Actions" GIT_COMMITTER_EMAIL="actions@github.com"
 
-    - name: Checkout state repository
-      shell: bash
-      run: |
-        GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no" \
-        # git clone --branch ${{ inputs.branch }} git@github.com:pieceowater-dev/lotof.cloud.state.git state-repo
-        git clone git@github.com:pieceowater-dev/lotof.cloud.state.${{ inputs.branch }}.git state-repo
+        git clone -q "git@github.com:pieceowater-dev/lotof.cloud.state.${STATE_BRANCH}.git" "$WORK/state"
+        cd "$WORK/state"
+        SHORT_SHA=$(echo "$COMMIT_SHA" | cut -c1-7)
+        sed -i "s|image:.*|image: ghcr.io/${OWNER}/${REPO_NAME}:${SHORT_SHA}|" "$REPO_NAME/patch.yaml"
+        if git diff --quiet; then
+          echo "$REPO_NAME is already at $SHORT_SHA"
+          exit 0
+        fi
+        git commit -q -am "Update image for ${REPO_NAME} to ${SHORT_SHA}"
 
-    - name: Update image version
-      shell: bash
-      run: |
-        set -e
-        cd state-repo/${{ inputs.repo-name }}
-        SHORT_SHA=$(echo "${{ inputs.commit-sha }}" | cut -c1-7)
-        # sed -i "s|image:.*|image: ghcr.io/${{ github.repository_owner }}/${{ inputs.repo-name }}:$SHORT_SHA|" manifest.yaml
-        sed -i "s|image:.*|image: ghcr.io/${{ github.repository_owner }}/${{ inputs.repo-name }}:$SHORT_SHA|" patch.yaml
-        git config --global user.name "GitHub Actions"
-        git config --global user.email "actions@github.com"
-        # git add manifest.yaml
-        git add patch.yaml
-        git commit -m "Update image for ${{ inputs.repo-name }} to $SHORT_SHA"
-        # git push origin ${{ inputs.branch }}
-        git push
+        # Several services deploy at once; a non-fast-forward push used to fail
+        # the job and silently drop that deploy. Rebase and retry instead.
+        for attempt in 1 2 3 4 5; do
+          if git push -q; then
+            echo "state updated: $REPO_NAME -> $SHORT_SHA"
+            exit 0
+          fi
+          sleep $((attempt * 2))
+          git pull -q --rebase
+        done
+        echo "failed to push the state update after 5 attempts" >&2
+        exit 1
