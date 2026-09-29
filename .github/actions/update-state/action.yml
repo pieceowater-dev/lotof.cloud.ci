@@ -41,6 +41,14 @@ runs:
         git clone -q "git@github.com:pieceowater-dev/lotof.cloud.state.${STATE_BRANCH}.git" "$WORK/state"
         cd "$WORK/state"
         SHORT_SHA=$(echo "$COMMIT_SHA" | cut -c1-7)
+        # Not everything running this pipeline is deployed: the lotof.sample.*
+        # templates build and publish an image nobody runs. Without this they
+        # died on a missing patch.yaml, which reads like a broken deploy
+        # rather than "there is nothing here to deploy".
+        if [ ! -f "$REPO_NAME/patch.yaml" ]; then
+          echo "::notice::$REPO_NAME has no entry in the state repo; nothing to deploy"
+          exit 0
+        fi
         sed -i "s|image:.*|image: ghcr.io/${OWNER}/${REPO_NAME}:${SHORT_SHA}|" "$REPO_NAME/patch.yaml"
         if git diff --quiet; then
           echo "$REPO_NAME is already at $SHORT_SHA"
